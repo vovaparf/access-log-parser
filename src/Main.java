@@ -6,13 +6,9 @@ public class Main {
         int firstNumber = new Scanner(System.in).nextInt();
         System.out.println("Введите второе число");
         int secondNumber = new Scanner(System.in).nextInt();
-        int sum = firstNumber + secondNumber;
-        int diff = firstNumber - secondNumber;
-        int mult = firstNumber * secondNumber;
-        double quotient = (double) firstNumber / secondNumber;
-        System.out.println("Сумма чисел: " + sum);
-        System.out.println("Разность чисел: " + diff);
-        System.out.println("Произведение чисел: " + mult);
-        System.out.println("Частное чисел: " + quotient);
+        System.out.println("Сумма чисел: " + (firstNumber + secondNumber));
+        System.out.println("Разность чисел: " + (firstNumber - secondNumber));
+        System.out.println("Произведение чисел: " + (firstNumber * secondNumber));
+        System.out.println("Частное чисел: " + ((double) firstNumber / secondNumber));
         }
     }
