@@ -1,7 +1,6 @@
 import java.io.*;
 import java.util.Scanner;
 
-
 public class Main {
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
@@ -31,35 +30,60 @@ public class Main {
 
                 String line;
                 int totalLines = 0;
-                int maxLength = 0;
-                int minLength = Integer.MAX_VALUE;
+                int googleCount = 0;
+                int yandexCount = 0;
 
                 while ((line = reader.readLine()) != null) {
                     totalLines++;
-                    int length = line.length();
 
-
-                    if (length > 1024) {
+                    if (line.length() > 1024) {
                         throw new LineTooLongException(
-                                "Ошибка: строка №" + totalLines + " превышает 1024 символа (длина = " + length + ")"
+                                "Ошибка: строка №" + totalLines +
+                                        " превышает 1024 символа (длина = " + line.length() + ")"
                         );
                     }
 
-                    if (length > maxLength) {
-                        maxLength = length;
-                    }
 
-                    if (length < minLength) {
-                        minLength = length;
+                    int openIndex = line.indexOf('(');
+                    int closeIndex = line.indexOf(')', openIndex + 1);
+
+                    if (openIndex != -1 && closeIndex != -1 && closeIndex > openIndex) {
+                        String firstBrackets = line.substring(openIndex + 1, closeIndex);
+                        String[] parts = firstBrackets.split(";");
+
+                        if (parts.length >= 2) {
+
+                            String fragment = parts[1].trim();
+
+
+                            int slashIndex = fragment.indexOf('/');
+                            if (slashIndex != -1) {
+                                fragment = fragment.substring(0, slashIndex).trim();
+                            }
+
+
+                            if (fragment.equalsIgnoreCase("Googlebot")) {
+                                googleCount++;
+                            } else if (fragment.equalsIgnoreCase("YandexBot")) {
+                                yandexCount++;
+                            }
+                        }
                     }
                 }
 
                 reader.close();
                 fileReader.close();
 
-                System.out.println("Общее количество строк: " + totalLines);
-                System.out.println("Длина самой длинной строки: " + maxLength);
-                System.out.println("Длина самой короткой строки: " + (minLength == Integer.MAX_VALUE ? 0 : minLength));
+
+                System.out.println("Всего запросов: " + totalLines);
+                if (totalLines > 0) {
+                    double googleShare = (googleCount * 100.0) / totalLines;
+                    double yandexShare = (yandexCount * 100.0) / totalLines;
+                    System.out.printf("Доля Googlebot: %.2f%%\n", googleShare);
+                    System.out.printf("Доля YandexBot: %.2f%%\n", yandexShare);
+                } else {
+                    System.out.println("Файл пуст или не содержит корректных строк.");
+                }
 
             } catch (LineTooLongException ex) {
                 System.err.println(ex.getMessage());
