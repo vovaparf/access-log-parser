@@ -2,10 +2,12 @@ import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class LogEntry {
-    private final String ipAddr;
-    private final LocalDateTime time;
+    private final String ip;
+    private final LocalDateTime dateTime;
     private final HttpMethod method;
     private final String path;
     private final int responseCode;
@@ -13,42 +15,75 @@ public class LogEntry {
     private final String referer;
     private final UserAgent userAgent;
 
-    public LogEntry(String logLine) {
-        String[] parts = logLine.split("\"");
 
-
-        String[] left = parts[0].trim().split(" ");
-        this.ipAddr = left[0];
-
-        int open = logLine.indexOf('[');
-        int close = logLine.indexOf(']');
-        String dateStr = logLine.substring(open + 1, close);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
-        this.time = ZonedDateTime.parse(dateStr, formatter).toLocalDateTime();
-
-
-        String[] requestParts = parts[1].split(" ");
-        this.method = HttpMethod.fromString(requestParts[0]);
-        this.path = requestParts.length > 1 ? requestParts[1] : "-";
-
-
-        String[] statusAndSize = parts[2].trim().split(" ");
-        this.responseCode = Integer.parseInt(statusAndSize[0]);
-        this.responseSize = (statusAndSize.length > 1 && !statusAndSize[1].equals("-"))
-                ? Integer.parseInt(statusAndSize[1]) : 0;
-
-
-        this.referer = parts.length > 3 ? parts[3] : "-";
-        String userAgentStr = parts.length > 5 ? parts[5] : "-";
-        this.userAgent = new UserAgent(userAgentStr);
+    public enum HttpMethod {
+        GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH, UNKNOWN
     }
 
-    public String getIpAddr() { return ipAddr; }
-    public LocalDateTime getTime() { return time; }
-    public HttpMethod getMethod() { return method; }
-    public String getPath() { return path; }
-    public int getResponseCode() { return responseCode; }
-    public int getResponseSize() { return responseSize; }
-    public String getReferer() { return referer; }
-    public UserAgent getUserAgent() { return userAgent; }
+    public LogEntry(String logLine) {
+
+        Pattern pattern = Pattern.compile(
+                "^(\\S+) \\S+ \\S+ \\[(.*?)\\] \"(\\S+) (.*?) .*?\" (\\d{3}) (\\d+|-) \"(.*?)\" \"(.*?)\"$"
+        );
+        Matcher matcher = pattern.matcher(logLine);
+
+        if (!matcher.find()) {
+            throw new IllegalArgumentException("Неверный формат строки лога: " + logLine);
+        }
+
+        this.ip = matcher.group(1);
+        String dateStr = matcher.group(2);
+        String methodStr = matcher.group(3);
+        this.path = matcher.group(4);
+        this.responseCode = Integer.parseInt(matcher.group(5));
+        String sizeStr = matcher.group(6);
+        this.responseSize = sizeStr.equals("-") ? 0 : Integer.parseInt(sizeStr);
+        this.referer = matcher.group(7);
+        this.userAgent = new UserAgent(matcher.group(8));
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
+        ZonedDateTime zonedDateTime = ZonedDateTime.parse(dateStr, formatter);
+        this.dateTime = zonedDateTime.toLocalDateTime();
+
+        HttpMethod tmpMethod;
+        try {
+            tmpMethod = HttpMethod.valueOf(methodStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            tmpMethod = HttpMethod.UNKNOWN;
+        }
+        this.method = tmpMethod;
+    }
+
+
+    public String getIp() {
+        return ip;
+    }
+
+    public LocalDateTime getDateTime() {
+        return dateTime;
+    }
+
+    public HttpMethod getMethod() {
+        return method;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public int getResponseCode() {
+        return responseCode;
+    }
+
+    public int getResponseSize() {
+        return responseSize;
+    }
+
+    public String getReferer() {
+        return referer;
+    }
+
+    public UserAgent getUserAgent() {
+        return userAgent;
+    }
 }

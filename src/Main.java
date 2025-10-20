@@ -43,9 +43,13 @@ public class Main {
                     stats.addEntry(entry);
 
                     String browser = entry.getUserAgent().getBrowser();
-                    if (browser.equalsIgnoreCase("Googlebot")) googleCount++;
-                    else if (browser.equalsIgnoreCase("YandexBot")) yandexCount++;
+                    if (browser.equalsIgnoreCase("Googlebot")) {
+                        googleCount++;
+                    } else if (browser.equalsIgnoreCase("YandexBot")) {
+                        yandexCount++;
+                    }
                 }
+
 
                 System.out.println("Всего запросов: " + totalLines);
                 if (totalLines > 0) {
@@ -58,20 +62,21 @@ public class Main {
                 double avgTraffic = stats.getTrafficRate();
                 System.out.printf("Средний часовой трафик: %.2f байт/час%n", avgTraffic);
 
-                System.out.println("\nСтраницы с кодом 200:");
+
+                System.out.println("\nСтраницы с кодом 200 (первые 10):");
                 int shown = 0;
                 for (String page : stats.getExistingPages()) {
                     System.out.println(" - " + page);
                     shown++;
                     if (shown >= 5) break;
                 }
+                System.out.println("... (всего страниц: " + stats.getExistingPages().size() + ")");
+
 
                 System.out.println("\nСтатистика операционных систем:");
                 for (Map.Entry<String, Double> entry : stats.getOSStatistics().entrySet()) {
                     System.out.printf("%s: %.2f%%%n", entry.getKey(), entry.getValue() * 100);
                 }
-
-
 
             } catch (LineTooLongException ex) {
                 System.err.println(ex.getMessage());
