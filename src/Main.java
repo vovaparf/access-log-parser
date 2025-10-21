@@ -60,8 +60,10 @@ public class Main {
                 }
 
                 double avgTraffic = stats.getTrafficRate();
-                System.out.printf("Средний часовой трафик: %.2f байт/час%n", avgTraffic);
 
+                System.out.println("\nСтраницы с кодом 404 (первые 10):");
+                stats.getMissingPages().stream().limit(5).forEach(p -> System.out.println(" - " + p));
+                System.out.println("... (всего: " + stats.getMissingPages().size() + ")");
 
                 System.out.println("\nСтраницы с кодом 200 (первые 10):");
                 int shown = 0;
