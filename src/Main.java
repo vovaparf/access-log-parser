@@ -1,6 +1,6 @@
 import java.io.*;
-import java.util.Map;
-import java.util.Scanner;
+import java.text.DecimalFormat;
+import java.util.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -21,71 +21,55 @@ public class Main {
             System.out.println("Путь указан верно!");
             System.out.println("Это файл номер " + fileCount);
 
+            Statistics stats = new Statistics();
+            int lineCount = 0;
+
             try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
                 String line;
-                int totalLines = 0;
-                int googleCount = 0;
-                int yandexCount = 0;
-
-                Statistics stats = new Statistics();
-
                 while ((line = reader.readLine()) != null) {
-                    totalLines++;
-
-                    if (line.length() > 1024) {
-                        throw new LineTooLongException(
-                                "Ошибка: строка №" + totalLines +
-                                        " превышает 1024 символа (длина = " + line.length() + ")"
-                        );
-                    }
-
-                    LogEntry entry = new LogEntry(line);
-                    stats.addEntry(entry);
-
-                    String browser = entry.getUserAgent().getBrowser();
-                    if (browser.equalsIgnoreCase("Googlebot")) {
-                        googleCount++;
-                    } else if (browser.equalsIgnoreCase("YandexBot")) {
-                        yandexCount++;
+                    try {
+                        lineCount++;
+                        LogEntry entry = new LogEntry(line);
+                        stats.addEntry(entry);
+                    } catch (Exception ignored) {
+                        // пропускаем некорректные строки
                     }
                 }
-
-
-                System.out.println("Всего запросов: " + totalLines);
-                if (totalLines > 0) {
-                    double googleShare = (googleCount * 100.0) / totalLines;
-                    double yandexShare = (yandexCount * 100.0) / totalLines;
-                    System.out.printf("Доля Googlebot: %.2f%%%n", googleShare);
-                    System.out.printf("Доля YandexBot: %.2f%%%n", yandexShare);
-                }
-
-                double avgTraffic = stats.getTrafficRate();
-
-                System.out.println("\nСтраницы с кодом 404 (первые 10):");
-                stats.getMissingPages().stream().limit(5).forEach(p -> System.out.println(" - " + p));
-                System.out.println("... (всего: " + stats.getMissingPages().size() + ")");
-
-                System.out.println("\nСтраницы с кодом 200 (первые 10):");
-                int shown = 0;
-                for (String page : stats.getExistingPages()) {
-                    System.out.println(" - " + page);
-                    shown++;
-                    if (shown >= 5) break;
-                }
-                System.out.println("... (всего страниц: " + stats.getExistingPages().size() + ")");
-
-
-                System.out.println("\nСтатистика операционных систем:");
-                for (Map.Entry<String, Double> entry : stats.getOSStatistics().entrySet()) {
-                    System.out.printf("%s: %.2f%%%n", entry.getKey(), entry.getValue() * 100);
-                }
-
-            } catch (LineTooLongException ex) {
-                System.err.println(ex.getMessage());
-                break;
             } catch (Exception ex) {
                 ex.printStackTrace();
+                continue;
             }
+
+            DecimalFormat df = new DecimalFormat("0.00");
+
+            System.out.println("Всего запросов: " + stats.getTotalRequests());
+            System.out.println("Доля Googlebot: " + df.format(stats.getGoogleBotShare() * 100) + "%");
+            System.out.println("Доля YandexBot: " + df.format(stats.getYandexBotShare() * 100) + "%");
+            System.out.println("Средний часовой трафик: " + df.format(stats.getAverageHourlyTraffic()) + " байт/час");
+            System.out.println("Среднее количество ошибочных запросов в час: " + df.format(stats.getAverageErrorRequestsPerHour()));
+            System.out.println("Средняя посещаемость одним пользователем: " + df.format(stats.getAverageVisitsPerUser()));
+
+            // Выводим статистику ОС
+            System.out.println("\nСтатистика операционных систем:");
+            stats.getOperatingSystemShare().forEach((os, share) ->
+                    System.out.println(os + ": " + df.format(share * 100) + "%"));
+
+            // Выводим статистику браузеров
+            System.out.println("\nСтатистика браузеров:");
+            stats.getBrowserShare().forEach((browser, share) ->
+                    System.out.println(browser + ": " + df.format(share * 100) + "%"));
+
+            // Выводим первые 10 существующих страниц (код 200)
+            List<String> pages200 = new ArrayList<>(stats.getExistingPages());
+            System.out.println("\nСтраницы с кодом 200 (первые 10):");
+            pages200.stream().limit(5).forEach(p -> System.out.println(" - " + p));
+            System.out.println("... (всего страниц: " + pages200.size() + ")");
+
+            // Выводим первые 10 несуществующих страниц (код 404)
+            List<String> pages404 = new ArrayList<>(stats.getNotFoundPages());
+            System.out.println("\nСтраницы с кодом 404 (первые 10):");
+            pages404.stream().limit(5).forEach(p -> System.out.println(" - " + p));
+            System.out.println("... (всего страниц: " + pages404.size() + ")\n");
         }
     }
 }

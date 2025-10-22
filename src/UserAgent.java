@@ -1,43 +1,54 @@
 public class UserAgent {
+    private final String fullAgent;
     private final String operatingSystem;
     private final String browser;
 
-    public UserAgent(String userAgentString) {
-        String os = "Other";
-        String br = "Other";
+    public UserAgent(String fullAgent) {
+        this.fullAgent = fullAgent == null ? "-" : fullAgent;
+        String uaLower = fullAgent.toLowerCase();
 
-        if (userAgentString != null) {
-            String ua = userAgentString.toLowerCase();
-
-
-            if (ua.contains("windows")) os = "Windows";
-            else if (ua.contains("mac os") || ua.contains("macintosh") || ua.contains("macos")) os = "macOS";
-            else if (ua.contains("linux")) os = "Linux";
-
-
-            if (ua.contains("googlebot")) br = "Googlebot";
-            else if (ua.contains("yandexbot") || ua.contains("yandex")) br = "YandexBot";
-            else if (ua.contains("edg/") || ua.contains("edge")) br = "Edge";
-            else if (ua.contains("opr/") || ua.contains("opera")) br = "Opera";
-            else if (ua.contains("chrome") && !ua.contains("edg") && !ua.contains("opr")) br = "Chrome";
-            else if (ua.contains("firefox")) br = "Firefox";
-            else if (ua.contains("safari") && !ua.contains("chrome")) br = "Safari";
+        // Определяем ОС
+        if (uaLower.contains("windows")) {
+            this.operatingSystem = "Windows";
+        } else if (uaLower.contains("mac")) {
+            this.operatingSystem = "macOS";
+        } else if (uaLower.contains("linux") || uaLower.contains("android")) {
+            this.operatingSystem = "Linux";
+        } else {
+            this.operatingSystem = "Other";
         }
 
-        this.operatingSystem = os;
-        this.browser = br;
+        // Определяем браузер
+        if (uaLower.contains("chrome")) {
+            this.browser = "Chrome";
+        } else if (uaLower.contains("firefox")) {
+            this.browser = "Firefox";
+        } else if (uaLower.contains("opera")) {
+            this.browser = "Opera";
+        } else if (uaLower.contains("edge")) {
+            this.browser = "Edge";
+        } else if (uaLower.contains("safari")) {
+            this.browser = "Safari";
+        } else if (uaLower.contains("bot")) {
+            this.browser = "Bot";
+        } else {
+            this.browser = "Other";
+        }
     }
 
+    public String getFullAgent() {
+        return fullAgent;
+    }
 
     public String getOperatingSystem() {
         return operatingSystem;
     }
 
-    public String getOs() {
-        return operatingSystem;
-    }
-
     public String getBrowser() {
         return browser;
+    }
+
+    public boolean isBot() {
+        return fullAgent.toLowerCase().contains("bot");
     }
 }

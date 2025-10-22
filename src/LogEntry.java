@@ -1,59 +1,58 @@
 import java.time.LocalDateTime;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class LogEntry {
     private final String ip;
     private final LocalDateTime dateTime;
-    private final HttpMethod method;
-    private final String path;
+    private final String method;
+    private final String requestPath;
     private final int responseCode;
-    private final int responseSize;
+    private final int bytes;
     private final String referer;
     private final UserAgent userAgent;
 
-
-    public enum HttpMethod {
-        GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH, UNKNOWN
-    }
+    private static final DateTimeFormatter formatter =
+            DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
 
     public LogEntry(String logLine) {
+        String[] parts = logLine.split(" ");
+        this.ip = parts[0];
 
-        Pattern pattern = Pattern.compile(
-                "^(\\S+) \\S+ \\S+ \\[(.*?)\\] \"(\\S+) (.*?) .*?\" (\\d{3}) (\\d+|-) \"(.*?)\" \"(.*?)\"$"
-        );
-        Matcher matcher = pattern.matcher(logLine);
+        // Извлекаем дату между [ ]
+        int dateStart = logLine.indexOf('[') + 1;
+        int dateEnd = logLine.indexOf(']');
+        String dateStr = logLine.substring(dateStart, dateEnd);
+        this.dateTime = LocalDateTime.parse(dateStr, formatter);
 
-        if (!matcher.find()) {
-            throw new IllegalArgumentException("Неверный формат строки лога: " + logLine);
-        }
+        // Извлекаем метод и путь между первыми кавычками
+        String[] quotes = logLine.split("\"");
+        String request = quotes.length > 1 ? quotes[1] : "";
+        String[] reqParts = request.split(" ");
+        this.method = reqParts.length > 0 ? reqParts[0] : "";
+        this.requestPath = reqParts.length > 1 ? reqParts[1] : "";
 
-        this.ip = matcher.group(1);
-        String dateStr = matcher.group(2);
-        String methodStr = matcher.group(3);
-        this.path = matcher.group(4);
-        this.responseCode = Integer.parseInt(matcher.group(5));
-        String sizeStr = matcher.group(6);
-        this.responseSize = sizeStr.equals("-") ? 0 : Integer.parseInt(sizeStr);
-        this.referer = matcher.group(7);
-        this.userAgent = new UserAgent(matcher.group(8));
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
-        ZonedDateTime zonedDateTime = ZonedDateTime.parse(dateStr, formatter);
-        this.dateTime = zonedDateTime.toLocalDateTime();
-
-        HttpMethod tmpMethod;
+        // Код и количество байт идут после второй кавычки
+        int secondQuote = logLine.indexOf('"', logLine.indexOf('"') + 1);
+        String afterRequest = logLine.substring(secondQuote + 1).trim();
+        String[] codeBytes = afterRequest.split(" ");
+        int code = 0, bytesCount = 0;
         try {
-            tmpMethod = HttpMethod.valueOf(methodStr.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            tmpMethod = HttpMethod.UNKNOWN;
+            code = Integer.parseInt(codeBytes[0]);
+            bytesCount = Integer.parseInt(codeBytes[1]);
+        } catch (Exception e) {
+            // Иногда бывает "-"
         }
-        this.method = tmpMethod;
-    }
+        this.responseCode = code;
+        this.bytes = bytesCount;
 
+        // Referer — третья кавычка
+        this.referer = quotes.length > 3 ? quotes[3] : "-";
+
+        // User-Agent — пятая кавычка
+        String ua = quotes.length > 5 ? quotes[5] : "-";
+        this.userAgent = new UserAgent(ua);
+    }
 
     public String getIp() {
         return ip;
@@ -63,20 +62,20 @@ public class LogEntry {
         return dateTime;
     }
 
-    public HttpMethod getMethod() {
+    public String getMethod() {
         return method;
     }
 
-    public String getPath() {
-        return path;
+    public String getRequestPath() {
+        return requestPath;
     }
 
     public int getResponseCode() {
         return responseCode;
     }
 
-    public int getResponseSize() {
-        return responseSize;
+    public int getBytes() {
+        return bytes;
     }
 
     public String getReferer() {
