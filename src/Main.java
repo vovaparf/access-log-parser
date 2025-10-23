@@ -69,8 +69,6 @@ public class Main {
 
     private static LogEntry parseLogLine(String line, DateTimeFormatter formatter) {
         try {
-            // Пример строки:
-            // 10.142.178.73 - - [25/Sep/2022:06:25:04 +0300] "GET /data.php?rss=1 HTTP/1.0" 200 49161 "-" "Mozilla/5.0 ..."
             String regex = "^(\\S+) - - \\[(.+?)] \"(\\S+) (\\S+) (\\S+)\" (\\d{3}) (\\d+|-) \"(.*?)\" \"(.*?)\"$";
             var matcher = java.util.regex.Pattern.compile(regex).matcher(line);
             if (!matcher.find()) return null;
