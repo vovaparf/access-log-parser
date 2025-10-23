@@ -1,75 +1,106 @@
 import java.io.*;
-import java.text.DecimalFormat;
+import java.nio.file.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class Main {
+
     public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        int fileCount = 0;
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Введите путь к файлу access.log: ");
+        String path = scanner.nextLine();
 
-        while (true) {
-            System.out.println("Введите путь к файлу:");
-            String path = sc.nextLine();
+        Path filePath = Paths.get(path);
+        if (!Files.exists(filePath)) {
+            System.out.println("Файл не найден!");
+            return;
+        }
 
-            File file = new File(path);
-            if (!file.exists() || file.isDirectory()) {
-                System.out.println("Указанный путь не существует или это папка. Попробуйте снова.");
-                continue;
-            }
+        Statistics stats = new Statistics();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
 
-            fileCount++;
-            System.out.println("Путь указан верно!");
-            System.out.println("Это файл номер " + fileCount);
-
-            Statistics stats = new Statistics();
+        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
+            String line;
             int lineCount = 0;
 
-            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    try {
-                        lineCount++;
-                        LogEntry entry = new LogEntry(line);
-                        stats.addEntry(entry);
-                    } catch (Exception ignored) {
-                        // пропускаем некорректные строки
-                    }
+            while ((line = reader.readLine()) != null) {
+                lineCount++;
+                LogEntry entry = parseLogLine(line, formatter);
+                if (entry != null) {
+                    stats.addEntry(entry);
                 }
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                continue;
             }
 
-            DecimalFormat df = new DecimalFormat("0.00");
-
+            System.out.println("Прочитано строк: " + lineCount);
             System.out.println("Всего запросов: " + stats.getTotalRequests());
-            System.out.println("Доля Googlebot: " + df.format(stats.getGoogleBotShare() * 100) + "%");
-            System.out.println("Доля YandexBot: " + df.format(stats.getYandexBotShare() * 100) + "%");
-            System.out.println("Средний часовой трафик: " + df.format(stats.getAverageHourlyTraffic()) + " байт/час");
-            System.out.println("Среднее количество ошибочных запросов в час: " + df.format(stats.getAverageErrorRequestsPerHour()));
-            System.out.println("Средняя посещаемость одним пользователем: " + df.format(stats.getAverageVisitsPerUser()));
 
-            // Выводим статистику ОС
-            System.out.println("\nСтатистика операционных систем:");
-            stats.getOperatingSystemShare().forEach((os, share) ->
-                    System.out.println(os + ": " + df.format(share * 100) + "%"));
+            System.out.printf("Доля Googlebot: %.2f%%%n", stats.getBotShare("googlebot") * 100);
+            System.out.printf("Доля YandexBot: %.2f%%%n", stats.getBotShare("yandexbot") * 100);
 
-            // Выводим статистику браузеров
-            System.out.println("\nСтатистика браузеров:");
-            stats.getBrowserShare().forEach((browser, share) ->
-                    System.out.println(browser + ": " + df.format(share * 100) + "%"));
+            System.out.printf("Средний часовой трафик: %.2f байт/час%n", stats.getAverageTrafficPerHour());
+            System.out.printf("Среднее количество ошибочных запросов в час: %.2f%n", stats.getAverageErrorsPerHour());
+            System.out.printf("Средняя посещаемость одним пользователем: %.2f%n", stats.getAverageVisitsPerUser());
+            System.out.printf("Пиковая посещаемость в секунду: %d%n", stats.getPeakVisitsPerSecond());
+            System.out.printf("Максимальная посещаемость одним пользователем: %d%n", stats.getMaxVisitsByOneUser());
 
-            // Выводим первые 10 существующих страниц (код 200)
-            List<String> pages200 = new ArrayList<>(stats.getExistingPages());
             System.out.println("\nСтраницы с кодом 200 (первые 10):");
-            pages200.stream().limit(5).forEach(p -> System.out.println(" - " + p));
-            System.out.println("... (всего страниц: " + pages200.size() + ")");
+            stats.getExistingPages().stream().limit(10).forEach(p -> System.out.println(" - " + p));
+            System.out.println("... (всего страниц: " + stats.getExistingPages().size() + ")");
 
-            // Выводим первые 10 несуществующих страниц (код 404)
-            List<String> pages404 = new ArrayList<>(stats.getNotFoundPages());
             System.out.println("\nСтраницы с кодом 404 (первые 10):");
-            pages404.stream().limit(5).forEach(p -> System.out.println(" - " + p));
-            System.out.println("... (всего страниц: " + pages404.size() + ")\n");
+            stats.getNotFoundPages().stream().limit(10).forEach(p -> System.out.println(" - " + p));
+            System.out.println("... (всего страниц: " + stats.getNotFoundPages().size() + ")");
+
+            System.out.println("\nОперационные системы:");
+            printPercentageMap(stats.getOsStats());
+
+            System.out.println("\nБраузеры:");
+            printPercentageMap(stats.getBrowserStats());
+
+            System.out.println("\nРефереры (доменные имена):");
+            stats.getReferringDomains().stream().limit(10).forEach(r -> System.out.println(" - " + r));
+            System.out.println("... (всего уникальных: " + stats.getReferringDomains().size() + ")");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static LogEntry parseLogLine(String line, DateTimeFormatter formatter) {
+        try {
+            // Пример строки:
+            // 10.142.178.73 - - [25/Sep/2022:06:25:04 +0300] "GET /data.php?rss=1 HTTP/1.0" 200 49161 "-" "Mozilla/5.0 ..."
+            String regex = "^(\\S+) - - \\[(.+?)] \"(\\S+) (\\S+) (\\S+)\" (\\d{3}) (\\d+|-) \"(.*?)\" \"(.*?)\"$";
+            var matcher = java.util.regex.Pattern.compile(regex).matcher(line);
+            if (!matcher.find()) return null;
+
+            String ip = matcher.group(1);
+            LocalDateTime date = LocalDateTime.parse(matcher.group(2), formatter);
+            String method = matcher.group(3);
+            String path = matcher.group(4);
+            int status = Integer.parseInt(matcher.group(6));
+            long bytes = matcher.group(7).equals("-") ? 0 : Long.parseLong(matcher.group(7));
+            String referer = matcher.group(8);
+            String userAgentString = matcher.group(9);
+
+            UserAgent agent = new UserAgent(userAgentString);
+            return new LogEntry(ip, date, method, path, status, bytes, referer, agent);
+
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static void printPercentageMap(Map<String, Integer> map) {
+        int total = map.values().stream().mapToInt(i -> i).sum();
+        if (total == 0) {
+            System.out.println("Нет данных.");
+            return;
+        }
+        for (var entry : map.entrySet()) {
+            double percent = entry.getValue() * 100.0 / total;
+            System.out.printf(" - %s: %.2f%%%n", entry.getKey(), percent);
         }
     }
 }

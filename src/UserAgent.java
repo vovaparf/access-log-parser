@@ -4,36 +4,22 @@ public class UserAgent {
     private final String browser;
 
     public UserAgent(String fullAgent) {
-        this.fullAgent = fullAgent == null ? "-" : fullAgent;
-        String uaLower = fullAgent.toLowerCase();
+        this.fullAgent = fullAgent != null ? fullAgent : "";
 
-        // Определяем ОС
-        if (uaLower.contains("windows")) {
-            this.operatingSystem = "Windows";
-        } else if (uaLower.contains("mac")) {
-            this.operatingSystem = "macOS";
-        } else if (uaLower.contains("linux") || uaLower.contains("android")) {
-            this.operatingSystem = "Linux";
-        } else {
-            this.operatingSystem = "Other";
-        }
+        String os;
+        if (fullAgent.contains("Windows")) os = "Windows";
+        else if (fullAgent.contains("Mac")) os = "macOS";
+        else if (fullAgent.contains("Linux")) os = "Linux";
+        else os = "Other";
+        this.operatingSystem = os;
 
-        // Определяем браузер
-        if (uaLower.contains("chrome")) {
-            this.browser = "Chrome";
-        } else if (uaLower.contains("firefox")) {
-            this.browser = "Firefox";
-        } else if (uaLower.contains("opera")) {
-            this.browser = "Opera";
-        } else if (uaLower.contains("edge")) {
-            this.browser = "Edge";
-        } else if (uaLower.contains("safari")) {
-            this.browser = "Safari";
-        } else if (uaLower.contains("bot")) {
-            this.browser = "Bot";
-        } else {
-            this.browser = "Other";
-        }
+        String br;
+        if (fullAgent.contains("Chrome")) br = "Chrome";
+        else if (fullAgent.contains("Firefox")) br = "Firefox";
+        else if (fullAgent.contains("Opera") || fullAgent.contains("OPR")) br = "Opera";
+        else if (fullAgent.contains("Edge")) br = "Edge";
+        else br = "Other";
+        this.browser = br;
     }
 
     public String getFullAgent() {
@@ -46,9 +32,5 @@ public class UserAgent {
 
     public String getBrowser() {
         return browser;
-    }
-
-    public boolean isBot() {
-        return fullAgent.toLowerCase().contains("bot");
     }
 }

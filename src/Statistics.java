@@ -1,115 +1,119 @@
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Statistics {
+
     private int totalRequests = 0;
     private long totalTraffic = 0;
+    private int errorRequests = 0;
+
+    private int realUserRequests = 0;
+    private int googleBotRequests = 0;
+    private int yandexBotRequests = 0;
 
     private LocalDateTime minTime = null;
     private LocalDateTime maxTime = null;
 
-    private int googleBotRequests = 0;
-    private int yandexBotRequests = 0;
-
-    private int totalErrorRequests = 0;
-    private int realUserRequests = 0;
-
     private final Set<String> existingPages = new HashSet<>();
     private final Set<String> notFoundPages = new HashSet<>();
 
-    private final Map<String, Integer> osCounts = new HashMap<>();
-    private final Map<String, Integer> browserCounts = new HashMap<>();
-    private final Set<String> realUserIPs = new HashSet<>();
+    private final Map<String, Integer> osStats = new HashMap<>();
+    private final Map<String, Integer> browserStats = new HashMap<>();
 
-    // === Основной метод добавления записи ===
+    private final Map<String, Integer> visitsPerUser = new HashMap<>();
+    private final Map<Integer, Integer> visitsPerSecond = new HashMap<>();
+    private final Set<String> referringDomains = new HashSet<>();
+
     public void addEntry(LogEntry entry) {
         totalRequests++;
 
-        // --- Обновление времени ---
         LocalDateTime time = entry.getDateTime();
-        if (time != null) {
-            if (minTime == null || time.isBefore(minTime)) {
-                minTime = time;
-            }
-            if (maxTime == null || time.isAfter(maxTime)) {
-                maxTime = time;
-            }
-        }
+        if (minTime == null || time.isBefore(minTime)) minTime = time;
+        if (maxTime == null || time.isAfter(maxTime)) maxTime = time;
 
-        // --- Подсчёт трафика ---
+        String agent = entry.getUserAgent().getFullAgent().toLowerCase();
+        boolean isBot = agent.contains("bot");
+
+        // --- Счётчики ботов ---
+        if (agent.contains("googlebot")) googleBotRequests++;
+        if (agent.contains("yandexbot")) yandexBotRequests++;
+
         totalTraffic += entry.getBytes();
 
-        // --- Проверка на успешные страницы (код 200) ---
-        if (entry.getResponseCode() == 200) {
-            existingPages.add(entry.getRequestPath());
-        }
+        if (entry.getStatusCode() == 200) existingPages.add(entry.getRequestPath());
+        if (entry.getStatusCode() == 404) notFoundPages.add(entry.getRequestPath());
+        if (entry.getStatusCode() >= 400 && entry.getStatusCode() < 600) errorRequests++;
 
-        // --- Проверка на несуществующие страницы (код 404) ---
-        if (entry.getResponseCode() == 404) {
-            notFoundPages.add(entry.getRequestPath());
-        }
-
-        // --- Подсчёт ошибок (4xx и 5xx) ---
-        if (entry.getResponseCode() >= 400 && entry.getResponseCode() < 600) {
-            totalErrorRequests++;
-        }
-
-        // --- Анализ User-Agent ---
-        String agent = entry.getUserAgent().getFullAgent();
-        if (agent == null) return;
-
-        boolean isBot = agent.toLowerCase().contains("bot");
-
-        if (agent.contains("Googlebot")) googleBotRequests++;
-        if (agent.contains("YandexBot")) yandexBotRequests++;
-
-        // --- Подсчёт ОС ---
-        String os = entry.getUserAgent().getOperatingSystem();
-        osCounts.put(os, osCounts.getOrDefault(os, 0) + 1);
-
-        // --- Подсчёт браузеров ---
-        String browser = entry.getUserAgent().getBrowser();
-        browserCounts.put(browser, browserCounts.getOrDefault(browser, 0) + 1);
-
-        // --- Подсчёт реальных пользователей ---
         if (!isBot) {
             realUserRequests++;
-            realUserIPs.add(entry.getIp());
+            osStats.merge(entry.getUserAgent().getOperatingSystem(), 1, Integer::sum);
+            browserStats.merge(entry.getUserAgent().getBrowser(), 1, Integer::sum);
+            visitsPerUser.merge(entry.getIpAddress(), 1, Integer::sum);
+
+            int secondKey = time.toLocalTime().toSecondOfDay();
+            visitsPerSecond.merge(secondKey, 1, Integer::sum);
+
+            String ref = entry.getReferer();
+            if (ref != null && ref.startsWith("http")) {
+                Matcher matcher = Pattern.compile("https?://([^/]+)/?").matcher(ref);
+                if (matcher.find()) {
+                    referringDomains.add(matcher.group(1));
+                }
+            }
         }
     }
 
-    // === Методы получения долей ===
-
-    public double getGoogleBotShare() {
-        return totalRequests == 0 ? 0 : (double) googleBotRequests / totalRequests;
-    }
-
-    public double getYandexBotShare() {
-        return totalRequests == 0 ? 0 : (double) yandexBotRequests / totalRequests;
-    }
-
-    // === Средний часовой трафик ===
-    public double getAverageHourlyTraffic() {
-        if (minTime == null || maxTime == null || minTime.equals(maxTime)) return 0;
-        double hours = Math.max(1, Duration.between(minTime, maxTime).toSeconds() / 3600.0);
+    // Средний трафик за час
+    public double getAverageTrafficPerHour() {
+        if (minTime == null || maxTime == null) return 0;
+        double hours = Duration.between(minTime, maxTime).toMinutes() / 60.0;
+        if (hours <= 0) hours = 1;
         return totalTraffic / hours;
     }
 
-    // === Среднее количество ошибочных запросов в час ===
-    public double getAverageErrorRequestsPerHour() {
-        if (minTime == null || maxTime == null || minTime.equals(maxTime)) return 0;
-        double hours = Math.max(1, Duration.between(minTime, maxTime).toSeconds() / 3600.0);
-        return totalErrorRequests / hours;
+    // Среднее количество ошибочных запросов в час
+    public double getAverageErrorsPerHour() {
+        if (minTime == null || maxTime == null) return 0;
+        double hours = Duration.between(minTime, maxTime).toMinutes() / 60.0;
+        if (hours <= 0) hours = 1;
+        return errorRequests / hours;
     }
 
-    // === Средняя посещаемость одним пользователем ===
+    // Средняя посещаемость одним пользователем
     public double getAverageVisitsPerUser() {
-        if (realUserIPs.isEmpty()) return 0;
-        return (double) realUserRequests / realUserIPs.size();
+        if (visitsPerUser.isEmpty()) return 0;
+        return (double) realUserRequests / visitsPerUser.size();
     }
 
-    // === Получение страниц ===
+    // Пиковая посещаемость в секунду
+    public int getPeakVisitsPerSecond() {
+        return visitsPerSecond.values().stream().max(Integer::compareTo).orElse(0);
+    }
+
+    // Список доменов-рефереров
+    public Set<String> getReferringDomains() {
+        return referringDomains;
+    }
+
+    // Максимальная посещаемость одним пользователем
+    public int getMaxVisitsByOneUser() {
+        return visitsPerUser.values().stream().max(Integer::compareTo).orElse(0);
+    }
+
+    // --- Доля Googlebot / YandexBot ---
+    public double getBotShare(String botName) {
+        if (totalRequests == 0) return 0.0;
+        if (botName.equalsIgnoreCase("googlebot")) {
+            return (double) googleBotRequests / totalRequests;
+        } else if (botName.equalsIgnoreCase("yandexbot")) {
+            return (double) yandexBotRequests / totalRequests;
+        }
+        return 0.0;
+    }
+
     public Set<String> getExistingPages() {
         return existingPages;
     }
@@ -118,32 +122,23 @@ public class Statistics {
         return notFoundPages;
     }
 
-    // === Статистика ОС ===
-    public Map<String, Double> getOperatingSystemShare() {
-        Map<String, Double> result = new HashMap<>();
-        int total = osCounts.values().stream().mapToInt(Integer::intValue).sum();
-        if (total == 0) return result;
-
-        for (Map.Entry<String, Integer> entry : osCounts.entrySet()) {
-            result.put(entry.getKey(), (double) entry.getValue() / total);
-        }
-        return result;
+    public Map<String, Integer> getOsStats() {
+        return osStats;
     }
 
-    // === Статистика браузеров ===
-    public Map<String, Double> getBrowserShare() {
-        Map<String, Double> result = new HashMap<>();
-        int total = browserCounts.values().stream().mapToInt(Integer::intValue).sum();
-        if (total == 0) return result;
-
-        for (Map.Entry<String, Integer> entry : browserCounts.entrySet()) {
-            result.put(entry.getKey(), (double) entry.getValue() / total);
-        }
-        return result;
+    public Map<String, Integer> getBrowserStats() {
+        return browserStats;
     }
 
-    // === Общее количество запросов ===
+    public long getTotalTraffic() {
+        return totalTraffic;
+    }
+
     public int getTotalRequests() {
         return totalRequests;
+    }
+
+    public int getErrorRequests() {
+        return errorRequests;
     }
 }
